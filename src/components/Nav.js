@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, FileText, Users, Receipt, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, Receipt, TrendingUp, BarChart2 } from 'lucide-react';
 import { LOGO } from '../logo';
 import { getUserProfile } from '../lib/supabase';
 
@@ -9,9 +9,10 @@ const TABS = [
   { id: 'customers', label: 'Clients',  icon: Users },
   { id: 'expenses',  label: 'Events',   icon: Receipt },
   { id: 'finance',   label: 'Finance',  icon: TrendingUp },
+  { id: 'reports',   label: 'Reports',  icon: BarChart2 },
 ];
 
-const TAB_LABELS = { dashboard: '🏠 Home', invoices: '📄 Invoices', customers: '👥 Clients', expenses: '🎪 Events', finance: '📊 Finance' };
+const TAB_LABELS = { dashboard: '🏠 Home', invoices: '📄 Invoices', customers: '👥 Clients', expenses: '🎪 Events', finance: '📊 Finance', reports: '📈 Reports' };
 
 export function TopNav({ tab, onTab, onProfile, user, onNew }) {
   const profile = getUserProfile(user?.email);
@@ -57,7 +58,7 @@ export function BottomNav({ tab, onTab }) {
     <nav className="bnav no-print">
       {TABS.map(({ id, label, icon: Icon }) => (
         <button key={id} className={`bnav-item${tab === id ? ' on' : ''}`} onClick={() => onTab(id)}>
-          <Icon size={21} strokeWidth={tab === id ? 2.5 : 1.8} />
+          <Icon size={18} strokeWidth={tab === id ? 2.5 : 1.8} />
           <span>{label}</span>
           <span className="bnav-pip" />
         </button>

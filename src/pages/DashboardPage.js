@@ -165,6 +165,10 @@ export default function DashboardPage({ user, invoices, customers, events, onOpe
           </div>
         </div>
       </div>
+
+      <button className="fab no-print" onClick={() => { onTab('invoices'); onNew('invoices'); }} style={{ background: 'var(--teal)' }} title="New Invoice">
+        <span style={{ fontSize: 24, lineHeight: 1 }}>+</span>
+      </button>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Filter, Eye, Edit, Trash2, FileEdit } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { fmt, fmtDate, getStatus, INVOICE_STATUSES, filterByDateRange } from '../lib/utils';
+import { fmt, fmtDate, getStatus, INVOICE_STATUSES, filterByDateRange, isOverdue } from '../lib/utils';
 
 export default function InvoicesPage({ invoices, drafts, onOpen, onEdit, onRefresh }) {
   const [search, setSearch]   = useState('');
@@ -23,7 +23,8 @@ export default function InvoicesPage({ invoices, drafts, onOpen, onEdit, onRefre
   const filtered = useMemo(() => {
     let list = invoices || [];
     if (search) { const s = search.toLowerCase(); list = list.filter(i => (i.customer_name||'').toLowerCase().includes(s) || (i.invoice_number||'').toLowerCase().includes(s)); }
-    if (statusF !== 'all') list = list.filter(i => i.status === statusF);
+    if (statusF === 'overdue') { list = list.filter(i => isOverdue(i)); }
+    else if (statusF !== 'all') { list = list.filter(i => i.status === statusF); }
     const { from: f, to: t } = getRange();
     if (f || t) list = filterByDateRange(list, 'date', f, t);
     return list;
@@ -112,6 +113,7 @@ export default function InvoicesPage({ invoices, drafts, onOpen, onEdit, onRefre
                   <div><label className="lbl">Status</label>
                     <select className="inp inp-sm" value={statusF} onChange={e => setStatusF(e.target.value)}>
                       <option value="all">All</option>
+                      <option value="overdue">⚠ Overdue (30+ days)</option>
                       {INVOICE_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </select>
                   </div>
@@ -140,10 +142,14 @@ export default function InvoicesPage({ invoices, drafts, onOpen, onEdit, onRefre
             : filtered.map((inv, i) => {
               const st = getStatus(inv.status);
               const balanceDue = Math.max(0, (inv.total||0) - (parseFloat(inv.amount_paid)||0));
+              const overdue = isOverdue(inv);
               return (
                 <div key={inv.id} className="list-row clickable" style={{ flexWrap: 'wrap', gap: '6px 10px' }} onClick={() => onOpen(inv)}>
                   <div style={{ flex: '1 1 160px', minWidth: 0 }}>
-                    <div style={{ fontFamily: 'var(--fn)', fontWeight: 700, color: 'var(--teal)', fontSize: 13 }}>{inv.invoice_number}</div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ fontFamily: 'var(--fn)', fontWeight: 700, color: 'var(--teal)', fontSize: 13 }}>{inv.invoice_number}</span>
+                      {overdue && <span className="badge" style={{ background: '#FEF2F0', color: '#E85D5D', fontSize: 10 }}>OVERDUE</span>}
+                    </div>
                     <div style={{ fontWeight: 600, fontSize: 14, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.customer_name || '—'}</div>
                     <div style={{ fontSize: 12, color: 'var(--t3)' }}>{fmtDate(inv.date)}</div>
                   </div>

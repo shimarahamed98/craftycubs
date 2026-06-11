@@ -17,14 +17,21 @@ export const uid = () =>
 export const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 export const INVOICE_STATUSES = [
-  { id: 'unpaid',  label: 'Unpaid',           color: '#E85D5D', bg: '#FEF2F0' },
-  { id: 'deposit', label: '50% Deposit Paid',  color: '#F6A435', bg: '#FEF7EC' },
-  { id: 'balance', label: '50% Balance Due',   color: '#7B8FD4', bg: '#EEF0FB' },
-  { id: 'partial', label: 'Partially Paid',    color: '#F78C6B', bg: '#FEF0EB' },
-  { id: 'paid',    label: 'Fully Paid',        color: '#4CAF82', bg: '#E8F7EF' },
+  { id: 'confirmed', label: 'Booking Confirmed', color: '#7B8FD4', bg: '#EEF0FB' },
+  { id: 'unpaid',    label: 'Unpaid',            color: '#E85D5D', bg: '#FEF2F0' },
+  { id: 'deposit',   label: '50% Deposit Paid',  color: '#F6A435', bg: '#FEF7EC' },
+  { id: 'balance',   label: '50% Balance Due',   color: '#F6A435', bg: '#FEF7EC' },
+  { id: 'partial',   label: 'Partially Paid',    color: '#F78C6B', bg: '#FEF0EB' },
+  { id: 'paid',      label: 'Fully Paid',        color: '#4CAF82', bg: '#E8F7EF' },
 ];
 
-export const getStatus = (id) => INVOICE_STATUSES.find(s => s.id === id) || INVOICE_STATUSES[0];
+export const getStatus = (id) => INVOICE_STATUSES.find(s => s.id === id) || INVOICE_STATUSES[1];
+
+export function isOverdue(invoice) {
+  if (!invoice || invoice.status === 'paid' || !invoice.date) return false;
+  const ageMs = Date.now() - new Date(invoice.date + 'T00:00:00').getTime();
+  return ageMs > 30 * 24 * 60 * 60 * 1000;
+}
 
 export const EXP_CATS = [
   { id: 'supplies',  label: 'Supplies / Materials', color: '#6EC5B8', bg: '#EBF8F6' },
@@ -63,7 +70,6 @@ export function filterByDateRange(items, field, from, to) {
   });
 }
 
-// Draft helpers — stored in Supabase, expire after 30 days
 export function isDraftExpired(draft) {
   if (!draft?.saved_at) return false;
   const age = Date.now() - new Date(draft.saved_at).getTime();

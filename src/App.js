@@ -9,6 +9,7 @@ import InvoicePreview from './pages/InvoicePreview';
 import CustomersPage from './pages/CustomersPage';
 import ExpensesPage from './pages/ExpensesPage';
 import FinancePage from './pages/FinancePage';
+import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
 import { TopNav, BottomNav } from './components/Nav';
 import './styles/app.css';
@@ -184,6 +185,7 @@ export default function App() {
       {!isFullscreen && tab === 'customers'  && <CustomersPage customers={customers} invoices={invoices} onRefresh={loadAll} />}
       {!isFullscreen && tab === 'expenses'   && <ExpensesPage events={events} invoices={invoices} onRefresh={loadAll} />}
       {!isFullscreen && tab === 'finance'    && <FinancePage user={user} invoices={invoices} events={events} />}
+      {!isFullscreen && tab === 'reports'   && <ReportsPage invoices={invoices} customers={customers} events={events} />}
 
       {!isFullscreen && (
         <button onClick={() => setView('settings')} className="no-print" title="Settings"

@@ -89,7 +89,7 @@ export default function FinancePage({ user, invoices = [], events = [] }) {
       [],
       ['Person Entries'],
       ['Person', 'Type', 'Amount', 'Note', 'Month', 'Year', 'By'],
-      ...entries.map(e => [e.person === 'R' ? 'Rumana' : 'Thaman', e.type, e.amount, e.note || '', e.month || '', e.year || '', e.created_by_email || '']),
+      ...entries.map(e => [e.person === 'R' ? 'Rumana' : 'Thamana', e.type, e.amount, e.note || '', e.month || '', e.year || '', e.created_by_email || '']),
     ];
     const csv = rows.map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -98,7 +98,7 @@ export default function FinancePage({ user, invoices = [], events = [] }) {
     URL.revokeObjectURL(url);
   }
 
-  const personLabel = { R: 'Rumana', T: 'Thaman' };
+  const personLabel = { R: 'Rumana', T: 'Thamana' };
 
   return (
     <div className="page">
@@ -142,7 +142,7 @@ export default function FinancePage({ user, invoices = [], events = [] }) {
         <div className="toggle fu" style={{ marginBottom: 16, animationDelay: '.06s' }}>
           {['combined', 'R', 'T'].map(v => (
             <button key={v} className={`toggle-btn${view === v ? ' on' : ''}`} onClick={() => setView(v)}>
-              {v === 'combined' ? '🏢 Combined' : v === 'R' ? '👩 Rumana' : '🧑 Thaman'}
+              {v === 'combined' ? '🏢 Combined' : v === 'R' ? '👩 Rumana' : '🧑 Thamana'}
             </button>
           ))}
         </div>
@@ -198,7 +198,7 @@ export default function FinancePage({ user, invoices = [], events = [] }) {
           <div className="card fu" style={{ animationDelay: '.10s', borderTop: '3px solid var(--teal)' }}>
             <div className="card-h">
               <div className="card-accent" style={{ background: 'var(--teal)' }} />
-              <span className="card-title">Thaman (T)</span>
+              <span className="card-title">Thamana (T)</span>
             </div>
             <div className="card-body">
               <div className="g2" style={{ marginBottom: 12 }}>
@@ -296,7 +296,7 @@ export default function FinancePage({ user, invoices = [], events = [] }) {
                 <label className="lbl">Person</label>
                 <select className="inp" value={form.person} onChange={e => setForm(f => ({ ...f, person: e.target.value }))}>
                   <option value="R">Rumana (R)</option>
-                  <option value="T">Thaman (T)</option>
+                  <option value="T">Thamana (T)</option>
                 </select>
               </div>
               <div className="field">

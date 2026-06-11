@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, ArrowLeft, Eye, Save } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, ArrowLeft, Eye, Save, BookmarkPlus, LayoutTemplate, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fmt, today, uid, calcTotals, INVOICE_STATUSES } from '../lib/utils';
 
@@ -34,16 +34,26 @@ function initData(invoice, settings) {
 
 export default function InvoiceEditor({ invoice, settings, customers, user, onSave, onBack, onPreview }) {
   const isNew = !invoice?.id || invoice?._isNew;
-  const [data, setData]     = useState(() => initData(invoice, settings));
-  const [errors, setErrors] = useState({});
-  const [saving, setSaving] = useState(false);
+  const [data, setData]       = useState(() => initData(invoice, settings));
+  const [errors, setErrors]   = useState({});
+  const [saving, setSaving]   = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [showTplModal, setShowTplModal] = useState(false);
+  const [tplName, setTplName] = useState('');
+  const [savingTpl, setSavingTpl] = useState(false);
   const autoSaveTimer = useRef(null);
   const draftIdRef = useRef(data._draftId);
 
+  // Load templates on mount
+  useEffect(() => {
+    supabase.from('invoice_templates').select('*').order('created_at', { ascending: false })
+      .then(({ data: d }) => setTemplates(d || []));
+  }, []);
+
   // ── AUTO-SAVE DRAFT ────────────────────────────────────────────────
   const saveDraft = useCallback(async (d) => {
-    if (!isNew) return; // only draft new invoices
+    if (!isNew) return;
     try {
       const payload = {
         data: d,
@@ -63,7 +73,6 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
     } catch (e) { console.error('Draft save error:', e); }
   }, [isNew]);
 
-  // Auto-save 2 seconds after last keystroke
   useEffect(() => {
     if (!isNew) return;
     clearTimeout(autoSaveTimer.current);
@@ -71,11 +80,8 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
     return () => clearTimeout(autoSaveTimer.current);
   }, [data, isNew, saveDraft]);
 
-  // Save on unmount / navigate away
   useEffect(() => {
-    return () => {
-      if (isNew) saveDraft(data);
-    };
+    return () => { if (isNew) saveDraft(data); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -88,13 +94,54 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
     setData(d => ({ ...d, customer_id: cid, customer_name: c.name || '', customer_phone: c.phone || '', customer_email: c.email || '', customer_address: c.address || '' }));
   }
 
-  const setItem  = (id, k, v) => setData(d => ({ ...d, items: d.items.map(i => i.id === id ? { ...i, [k]: v } : i) }));
-  const addMain  = ()          => setData(d => ({ ...d, items: [...d.items, emptyMain()] }));
-  const rmMain   = (id)        => { if (data.items.length === 1) return; setData(d => ({ ...d, items: d.items.filter(i => i.id !== id) })); };
+  function applyTemplate(tplId) {
+    const t = templates.find(x => x.id === tplId);
+    if (!t?.data) return;
+    const { items, notes, terms, bank_account_name, bank_account, bank_name, discount_type, discount, delivery } = t.data;
+    setData(d => ({
+      ...d,
+      items: items?.length ? items.map(i => ({ ...i, id: uid(), subItems: (i.subItems || []).map(s => ({ ...s, id: uid() })) })) : d.items,
+      notes: notes || d.notes,
+      terms: terms || d.terms,
+      bank_account_name: bank_account_name || d.bank_account_name,
+      bank_account: bank_account || d.bank_account,
+      bank_name: bank_name || d.bank_name,
+      discount_type: discount_type || d.discount_type,
+      discount: discount || d.discount,
+      delivery: delivery || d.delivery,
+    }));
+  }
+
+  async function saveAsTemplate() {
+    if (!tplName.trim()) { alert('Give the template a name'); return; }
+    setSavingTpl(true);
+    const { subtotal, discAmt, total } = calcTotals(data.items, data.discount_type, data.discount, data.delivery);
+    await supabase.from('invoice_templates').insert([{
+      id: uid(),
+      name: tplName.trim(),
+      data: { ...data, subtotal, discount_amt: discAmt, total },
+      created_by: user?.id,
+    }]);
+    const { data: d } = await supabase.from('invoice_templates').select('*').order('created_at', { ascending: false });
+    setTemplates(d || []);
+    setSavingTpl(false);
+    setShowTplModal(false);
+    setTplName('');
+  }
+
+  async function deleteTpl(id) {
+    if (!window.confirm('Delete this template?')) return;
+    await supabase.from('invoice_templates').delete().eq('id', id);
+    setTemplates(t => t.filter(x => x.id !== id));
+  }
+
+  const setItem   = (id, k, v) => setData(d => ({ ...d, items: d.items.map(i => i.id === id ? { ...i, [k]: v } : i) }));
+  const addMain   = ()         => setData(d => ({ ...d, items: [...d.items, emptyMain()] }));
+  const rmMain    = (id)       => { if (data.items.length === 1) return; setData(d => ({ ...d, items: d.items.filter(i => i.id !== id) })); };
   const toggleSub = (id)       => setData(d => ({ ...d, items: d.items.map(i => i.id === id ? { ...i, hasSubItems: !i.hasSubItems, subItems: !i.hasSubItems && !i.subItems?.length ? [emptySub()] : i.subItems } : i) }));
-  const addSub   = (mid)       => setData(d => ({ ...d, items: d.items.map(i => i.id === mid ? { ...i, subItems: [...(i.subItems || []), emptySub()] } : i) }));
-  const rmSub    = (mid, sid)  => setData(d => ({ ...d, items: d.items.map(i => i.id === mid ? { ...i, subItems: (i.subItems || []).filter(s => s.id !== sid) } : i) }));
-  const setSub   = (mid, sid, k, v) => setData(d => ({ ...d, items: d.items.map(i => i.id === mid ? { ...i, subItems: (i.subItems || []).map(s => s.id === sid ? { ...s, [k]: v } : s) } : i) }));
+  const addSub    = (mid)      => setData(d => ({ ...d, items: d.items.map(i => i.id === mid ? { ...i, subItems: [...(i.subItems || []), emptySub()] } : i) }));
+  const rmSub     = (mid, sid) => setData(d => ({ ...d, items: d.items.map(i => i.id === mid ? { ...i, subItems: (i.subItems || []).filter(s => s.id !== sid) } : i) }));
+  const setSub    = (mid, sid, k, v) => setData(d => ({ ...d, items: d.items.map(i => i.id === mid ? { ...i, subItems: (i.subItems || []).map(s => s.id === sid ? { ...s, [k]: v } : s) } : i) }));
 
   const { subtotal, discAmt, total } = calcTotals(data.items, data.discount_type, data.discount, data.delivery);
   const getFinal = () => ({ ...data, subtotal, discount_amt: discAmt, total });
@@ -109,14 +156,51 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
     return !Object.keys(e).length;
   }
 
+  // ── AUTO-CREATE CUSTOMER ───────────────────────────────────────────
+  async function ensureCustomer(inv) {
+    if (inv.customer_id) return inv.customer_id;
+    if (!inv.customer_name?.trim()) return null;
+    // Check if exists by name
+    const { data: existing } = await supabase.from('customers').select('id').ilike('name', inv.customer_name.trim()).maybeSingle();
+    if (existing?.id) return existing.id;
+    const newId = uid();
+    await supabase.from('customers').insert([{
+      id: newId,
+      name: inv.customer_name.trim(),
+      phone: inv.customer_phone || '',
+      email: inv.customer_email || '',
+      address: inv.customer_address || '',
+    }]);
+    return newId;
+  }
+
+  // ── AUTO-CREATE EVENT ──────────────────────────────────────────────
+  async function ensureEvent(inv, customerId) {
+    // Create event silently using the invoice data
+    const eventName = inv.items?.find(i => i.name)?.name || `Event for ${inv.customer_name}`;
+    const eventId = uid();
+    await supabase.from('events').insert([{
+      id: eventId,
+      name: eventName,
+      date: inv.date || today(),
+      customer_id: customerId || null,
+      customer_name: inv.customer_name || '',
+      invoice_id: inv.id,
+      total_expenses: 0,
+      notes: `Auto-created from invoice ${inv.invoice_number}`,
+    }]).then(() => {});
+  }
+
   async function handleSave() {
     if (!validate()) return;
     setSaving(true);
     const inv = getFinal();
     try {
+      const customerId = await ensureCustomer(inv);
       const row = {
         invoice_number: inv.invoice_number, date: inv.date,
-        customer_id: inv.customer_id || null, customer_name: inv.customer_name,
+        customer_id: customerId || inv.customer_id || null,
+        customer_name: inv.customer_name,
         customer_phone: inv.customer_phone, customer_email: inv.customer_email,
         customer_address: inv.customer_address, items: inv.items,
         subtotal: inv.subtotal, discount_type: inv.discount_type, discount: inv.discount,
@@ -133,12 +217,13 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
           created_by_email: user?.email,
         }]);
         if (error) throw error;
-        // Log history
         await supabase.from('invoice_history').insert([{
           invoice_id: inv.id, action: 'created',
           changed_by: user?.id, changed_by_email: user?.email,
           snapshot: row,
         }]);
+        // Auto-create event silently
+        await ensureEvent(inv, customerId);
         if (draftIdRef.current) {
           await supabase.from('drafts').delete().eq('id', draftIdRef.current);
         }
@@ -150,14 +235,13 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
           updated_by_email: user?.email,
         }).eq('id', inv.id);
         if (error) throw error;
-        // Log history
         await supabase.from('invoice_history').insert([{
           invoice_id: inv.id, action: 'updated',
           changed_by: user?.id, changed_by_email: user?.email,
           snapshot: row,
         }]);
       }
-      onSave(inv);
+      onSave({ ...inv, customer_id: customerId || inv.customer_id });
     } catch (err) {
       alert('Could not save: ' + err.message);
     }
@@ -187,8 +271,45 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
 
       <div className="wrap-sm" style={{ paddingTop: 72 }}>
 
+        {/* Templates */}
+        <div className="card fu" style={{ border: '1.5px solid var(--purple)', animationDelay: '0s' }}>
+          <div className="card-h" style={{ background: '#F5F3FF' }}>
+            <div className="card-accent" style={{ background: 'var(--purple)' }} />
+            <LayoutTemplate size={14} style={{ color: 'var(--purple)' }} />
+            <span className="card-title" style={{ color: 'var(--purple)' }}>Templates</span>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              {templates.length > 0 && (
+                <select className="inp inp-sm" style={{ width: 'auto', minWidth: 160 }}
+                  defaultValue=""
+                  onChange={e => { if (e.target.value) applyTemplate(e.target.value); e.target.value = ''; }}>
+                  <option value="">Load a template…</option>
+                  {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              )}
+              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--purple)', borderColor: 'var(--purple)' }} onClick={() => setShowTplModal(true)}>
+                <BookmarkPlus size={13} /> Save as Template
+              </button>
+            </div>
+          </div>
+          {templates.length > 0 && (
+            <div style={{ padding: '6px 14px 8px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {templates.map(t => (
+                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F0EFFE', borderRadius: 99, padding: '3px 10px 3px 6px', fontSize: 12 }}>
+                  <button onClick={() => applyTemplate(t.id)} style={{ border: 'none', background: 'none', color: 'var(--purple)', fontWeight: 700, cursor: 'pointer', fontSize: 12, padding: 0 }}>{t.name}</button>
+                  <button onClick={() => deleteTpl(t.id)} style={{ border: 'none', background: 'none', color: 'var(--t3)', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {templates.length === 0 && (
+            <div style={{ padding: '8px 14px 10px', fontSize: 12.5, color: 'var(--t3)' }}>
+              No templates yet — fill in items below, then save as template to reuse later.
+            </div>
+          )}
+        </div>
+
         {/* Invoice meta */}
-        <div className="card fu">
+        <div className="card fu" style={{ animationDelay: '.05s' }}>
           <div className="card-h"><div className="card-accent" style={{ background: 'var(--teal)' }} /><span className="card-title">Invoice Details</span></div>
           <div className="card-body">
             <div className="g2">
@@ -199,7 +320,7 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
         </div>
 
         {/* Customer */}
-        <div className="card fu" style={{ animationDelay: '.05s' }}>
+        <div className="card fu" style={{ animationDelay: '.10s' }}>
           <div className="card-h"><div className="card-accent" style={{ background: 'var(--coral)' }} /><span className="card-title">Customer</span></div>
           <div className="card-body">
             {(customers || []).length > 0 && (
@@ -222,7 +343,7 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
         </div>
 
         {/* Items */}
-        <div className="card fu" style={{ animationDelay: '.10s' }}>
+        <div className="card fu" style={{ animationDelay: '.15s' }}>
           <div className="card-h"><div className="card-accent" style={{ background: 'var(--yellow)' }} /><span className="card-title">Items & Services</span></div>
           <div className="card-body" style={{ paddingBottom: 12 }}>
             {errors.items && <div style={{ color: 'var(--red)', fontSize: 12.5, marginBottom: 10 }}>⚠ {errors.items}</div>}
@@ -270,7 +391,7 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
         </div>
 
         {/* Pricing */}
-        <div className="card fu" style={{ animationDelay: '.15s' }}>
+        <div className="card fu" style={{ animationDelay: '.20s' }}>
           <div className="card-h"><div className="card-accent" style={{ background: 'var(--navy)' }} /><span className="card-title">Pricing & Status</span></div>
           <div className="card-body">
             <div className="g2" style={{ marginBottom: 16 }}>
@@ -307,7 +428,7 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
         </div>
 
         {/* Notes & Terms */}
-        <div className="card fu" style={{ animationDelay: '.2s' }}>
+        <div className="card fu" style={{ animationDelay: '.25s' }}>
           <div className="card-h"><div className="card-accent" style={{ background: 'var(--teal)' }} /><span className="card-title">Notes & Terms</span></div>
           <div className="card-body">
             <div className="field"><label className="lbl">Notes</label><textarea className="inp" rows={2} value={data.notes} onChange={e => set('notes', e.target.value)} style={{ resize: 'vertical' }} placeholder="Thank you for your booking!" /></div>
@@ -316,7 +437,7 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
         </div>
 
         {/* Bank */}
-        <div className="card fu" style={{ animationDelay: '.25s' }}>
+        <div className="card fu" style={{ animationDelay: '.30s' }}>
           <div className="card-h"><div className="card-accent" style={{ background: 'var(--coral)' }} /><span className="card-title">Bank Details</span></div>
           <div className="card-body">
             <div className="g2">
@@ -333,6 +454,28 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}><Save size={14} /> {saving ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
+
+      {/* Save as Template modal */}
+      {showTplModal && (
+        <div className="overlay fi" onClick={() => setShowTplModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-drag" />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h2 className="modal-title" style={{ marginBottom: 0 }}>Save as Template</h2>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowTplModal(false)}><X size={15} /></button>
+            </div>
+            <p style={{ fontSize: 12.5, color: 'var(--t2)', marginBottom: 16 }}>This saves your current items, terms, and bank details. Customer info and invoice number are not saved.</p>
+            <div className="field">
+              <label className="lbl">Template Name</label>
+              <input className="inp" placeholder="e.g. Tote Bag Package, Birthday Party" value={tplName} onChange={e => setTplName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveAsTemplate()} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 12 }}>
+              <button className="btn btn-ghost" onClick={() => setShowTplModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={saveAsTemplate} disabled={savingTpl}>{savingTpl ? 'Saving…' : 'Save Template'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
