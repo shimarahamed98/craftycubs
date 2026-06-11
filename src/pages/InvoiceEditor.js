@@ -60,6 +60,7 @@ export default function InvoiceEditor({ invoice, settings, customers, user, onSa
         saved_at: new Date().toISOString(),
         invoice_number: d.invoice_number,
         customer_name: d.customer_name,
+        created_by: user?.id || null,
       };
       if (draftIdRef.current) {
         await supabase.from('drafts').update(payload).eq('id', draftIdRef.current);
