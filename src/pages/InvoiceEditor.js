@@ -32,7 +32,7 @@ function initData(invoice, settings) {
   };
 }
 
-export default function InvoiceEditor({ invoice, settings, customers, onSave, onBack, onPreview }) {
+export default function InvoiceEditor({ invoice, settings, customers, user, onSave, onBack, onPreview }) {
   const isNew = !invoice?.id || invoice?._isNew;
   const [data, setData]     = useState(() => initData(invoice, settings));
   const [errors, setErrors] = useState({});
@@ -103,6 +103,8 @@ export default function InvoiceEditor({ invoice, settings, customers, onSave, on
     const e = {};
     if (!data.customer_name?.trim()) e.name = 'Customer name required';
     if ((data.items || []).every(i => !i.name?.trim())) e.items = 'Add at least one item';
+    const paid = parseFloat(data.amount_paid) || 0;
+    if (paid > total) e.amount_paid = `Amount paid (LKR ${fmt(paid)}) cannot exceed invoice total (LKR ${fmt(total)})`;
     setErrors(e);
     return !Object.keys(e).length;
   }
@@ -125,15 +127,35 @@ export default function InvoiceEditor({ invoice, settings, customers, onSave, on
       if (isNew) {
         const nextNum = (settings?.nextNum || 351) + 1;
         await supabase.from('settings').upsert({ id: 'global', data: { ...settings, nextNum } });
-        const { error } = await supabase.from('invoices').insert([{ id: inv.id, ...row }]);
+        const { error } = await supabase.from('invoices').insert([{
+          id: inv.id, ...row,
+          created_by: user?.id,
+          created_by_email: user?.email,
+        }]);
         if (error) throw error;
-        // Delete draft after successful save
+        // Log history
+        await supabase.from('invoice_history').insert([{
+          invoice_id: inv.id, action: 'created',
+          changed_by: user?.id, changed_by_email: user?.email,
+          snapshot: row,
+        }]);
         if (draftIdRef.current) {
           await supabase.from('drafts').delete().eq('id', draftIdRef.current);
         }
       } else {
-        const { error } = await supabase.from('invoices').update({ ...row, updated_at: new Date().toISOString() }).eq('id', inv.id);
+        const { error } = await supabase.from('invoices').update({
+          ...row,
+          updated_at: new Date().toISOString(),
+          updated_by: user?.id,
+          updated_by_email: user?.email,
+        }).eq('id', inv.id);
         if (error) throw error;
+        // Log history
+        await supabase.from('invoice_history').insert([{
+          invoice_id: inv.id, action: 'updated',
+          changed_by: user?.id, changed_by_email: user?.email,
+          snapshot: row,
+        }]);
       }
       onSave(inv);
     } catch (err) {
@@ -261,7 +283,11 @@ export default function InvoiceEditor({ invoice, settings, customers, onSave, on
                 </select>
               </div>
               {['partial', 'deposit', 'balance'].includes(data.status) && (
-                <div className="field"><label className="lbl">Amount Paid (LKR)</label><input className="inp" type="number" min="0" value={data.amount_paid} onChange={e => set('amount_paid', e.target.value)} /></div>
+                <div className="field">
+                  <label className="lbl">Amount Paid (LKR)</label>
+                  <input className={`inp${errors.amount_paid ? ' err' : ''}`} type="number" min="0" max={total} value={data.amount_paid} onChange={e => set('amount_paid', e.target.value)} />
+                  {errors.amount_paid && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>⚠ {errors.amount_paid}</div>}
+                </div>
               )}
             </div>
             <div style={{ background: 'var(--surface2)', borderRadius: 'var(--rl)', padding: 16, border: '1px solid var(--border)' }}>

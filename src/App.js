@@ -137,7 +137,10 @@ export default function App() {
   function openInvoice(inv)  { setActiveInvoice(inv); setTab('invoices'); setView('preview'); }
   function editInvoice(inv)  { setActiveInvoice(inv || { _isNew: true, invoice_number: `${settings.prefix}-${settings.nextNum}` }); setView('editor'); }
   function savedInvoice(inv) { setActiveInvoice(inv); setView('preview'); loadAll(); }
-  function handleNew()       { if (tab === 'invoices') newInvoice(); }
+  function handleNew(forTab) {
+    const target = forTab || tab;
+    if (target === 'invoices') newInvoice();
+  }
   function handleSaveSettings(s) { setSettings(s); setView('list'); }
 
   // ── RENDER ────────────────────────────────────────────────────────
@@ -166,6 +169,7 @@ export default function App() {
           invoice={activeInvoice?._isNew ? null : activeInvoice}
           settings={{ ...settings, _nextNumber: activeInvoice?.invoice_number }}
           customers={customers}
+          user={user}
           onSave={savedInvoice}
           onBack={goBack}
           onPreview={(inv) => { setActiveInvoice(inv); setView('preview'); }}
@@ -179,7 +183,7 @@ export default function App() {
       {!isFullscreen && tab === 'invoices'   && <InvoicesPage invoices={invoices} drafts={drafts} onOpen={openInvoice} onEdit={editInvoice} onRefresh={loadAll} />}
       {!isFullscreen && tab === 'customers'  && <CustomersPage customers={customers} invoices={invoices} onRefresh={loadAll} />}
       {!isFullscreen && tab === 'expenses'   && <ExpensesPage events={events} invoices={invoices} onRefresh={loadAll} />}
-      {!isFullscreen && tab === 'finance'    && <FinancePage user={user} />}
+      {!isFullscreen && tab === 'finance'    && <FinancePage user={user} invoices={invoices} events={events} />}
 
       {!isFullscreen && (
         <button onClick={() => setView('settings')} className="no-print" title="Settings"

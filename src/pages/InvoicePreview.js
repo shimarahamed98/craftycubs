@@ -1,9 +1,28 @@
-import React from 'react';
-import { ArrowLeft, Download, Edit } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowLeft, Download, Edit, BookmarkCheck } from 'lucide-react';
 import { fmt, fmtDate } from '../lib/utils';
 import { LOGO } from '../logo';
+import { supabase } from '../lib/supabase';
 
 export default function InvoicePreview({ invoice, settings, onBack, onEdit }) {
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved]   = useState(false);
+
+  async function saveDraft() {
+    setSaving(true);
+    const draftId = invoice._draftId || `draft_${invoice.invoice_number || Date.now()}`;
+    await supabase.from('drafts').upsert({
+      id: draftId,
+      data: invoice,
+      invoice_number: invoice.invoice_number || '',
+      customer_name: invoice.customer_name || '',
+      saved_at: new Date().toISOString(),
+    });
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  }
+
   async function downloadPDF() {
     const { default: html2pdf } = await import('html2pdf.js');
     const el = document.getElementById('inv-print');
@@ -62,6 +81,11 @@ export default function InvoicePreview({ invoice, settings, onBack, onEdit }) {
         <button className="btn btn-sm" style={{ color: '#fff', background: 'rgba(255,255,255,.12)', border: 'none' }} onClick={onBack}><ArrowLeft size={14} /> Back</button>
         <span style={{ fontFamily: 'var(--fn)', fontWeight: 800, color: '#fff', fontSize: 14 }}>Preview</span>
         <div style={{ display: 'flex', gap: 8 }}>
+          {invoice?._isNew && (
+            <button className="btn btn-sm" style={{ color: '#fff', background: saved ? 'rgba(34,197,94,.4)' : 'rgba(255,255,255,.12)', border: 'none' }} onClick={saveDraft} disabled={saving}>
+              <BookmarkCheck size={13} /> {saving ? '…' : saved ? 'Saved!' : 'Save Draft'}
+            </button>
+          )}
           {onEdit && <button className="btn btn-sm" style={{ color: '#fff', background: 'rgba(255,255,255,.12)', border: 'none' }} onClick={onEdit}><Edit size={13} /> Edit</button>}
           <button className="btn btn-primary btn-sm" onClick={downloadPDF}><Download size={13} /> PDF</button>
         </div>
