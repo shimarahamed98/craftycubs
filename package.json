@@ -8,7 +8,7 @@
     "react-scripts": "5.0.1",
     "@supabase/supabase-js": "^2.39.0",
     "html2pdf.js": "^0.10.1",
-    "lucide-react": "^0.383.0",
+    "lucide-react": "^0.383.0"
   },
   "devDependencies": {
     "eslint-plugin-react-hooks": "^4.6.0"
