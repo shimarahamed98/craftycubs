@@ -41,7 +41,11 @@ export default function InvoicesPage({ invoices, drafts, onOpen, onEdit, onRefre
   }
 
   async function del(id) {
-    if (!window.confirm('Delete this invoice?')) return;
+    if (!window.confirm('Delete this invoice? This cannot be undone.')) return;
+    // Delete related records first (FK order)
+    await supabase.from('invoice_history').delete().eq('invoice_id', id);
+    await supabase.from('payments').delete().eq('invoice_id', id);
+    await supabase.from('events').delete().eq('invoice_id', id);
     await supabase.from('invoices').delete().eq('id', id);
     onRefresh();
   }
